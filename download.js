@@ -18,31 +18,44 @@ const { chromium } = require('playwright');
     // טעינת הדף
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    const downloadBtnSelector = 'a#downloadButton';
-    
-    console.log('Waiting for download button to appear...');
-    
-    // המתנה אקטיבית עד שהכפתור מופיע ויש לו href או מאפיין תקין
+    console.log('Searching for download button or link...');
+
     let directLink = null;
-    for (let i = 0; i < 15; i++) {
+
+    // נסה לאתר את הקישור בכמה דרכים שונות
+    const possibleSelectors = [
+      'a#downloadButton',
+      'a.dl_link',
+      'a.md-btn--go',
+      'a[data-md-which="d"]',
+      'a:has-text("Download")'
+    ];
+
+    for (const selector of possibleSelectors) {
       try {
-        await page.waitForSelector(downloadBtnSelector, { timeout: 2000 });
-        directLink = await page.$eval(downloadBtnSelector, el => el.href);
-        if (directLink && directLink.startsWith('http')) {
-          break;
+        const element = await page.waitForSelector(selector, { timeout: 5000 });
+        if (element) {
+          directLink = await element.evaluate(el => el.href || el.getAttribute('data-md-dl'));
+          if (directLink) {
+            console.log(`Found using selector: ${selector}`);
+            break;
+          }
         }
       } catch (e) {
-        // ממשיך לנסות אם הכפתור עדיין לא נטען במלואו
+        // ממשיך לנסות סלקטור הבא
       }
-      await page.waitForTimeout(1000);
     }
 
+    // אם עדיין לא נמצא, נחפש כל קישור שמכיל את המילה dl או דורש הורדה
     if (!directLink) {
-      // אם ה-href ריק או לא נמצא, ננסה ללחוץ עליו כדי לגרום לקישור להופיע
-      console.log('Clicking the button to trigger download link...');
-      await page.click(downloadBtnSelector);
-      await page.waitForTimeout(3000);
-      directLink = await page.$eval(downloadBtnSelector, el => el.href).catch(() => null);
+      const links = await page.$$eval('a', elList => el.map(el => ({ href: el.href, text: el.innerText, id: el.id, className: el.className })));
+      console.log('Available links on page:', JSON.stringify(links, null, 2));
+      
+      // ננסה לאתר קישור שנראה כמו הורדה ישירה
+      const found = links.find(l => l.id === 'downloadButton' || l.className.includes('dl_link') || l.text.toLowerCase().includes('download'));
+      if (found) {
+        directLink = found.href;
+      }
     }
 
     if (directLink) {
@@ -50,7 +63,7 @@ const { chromium } = require('playwright');
       console.log(`SUCCESS_DOWNLOAD_LINK: ${directLink}`);
       console.log('----------------------------------------');
     } else {
-      throw new Error('Could not extract the direct download link.');
+      throw new Error('Could not find the download link on the page.');
     }
 
   } catch (error) {
