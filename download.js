@@ -16,8 +16,8 @@ const { chromium } = require('playwright');
   const page = await context.newPage();
 
   try {
-    // מעבר לאתר והמתנה לטעינה מלאה
-    await page.goto(targetUrl, { waitUntil: 'networkidle' });
+    // מעבר לאתר והמתנה לטעינת ה-DOM בלבד (מונע תקיעות בגלל סקריפטים ופרסומות ברקע)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // סלקטור מדויק המבוסס על מבנה הכפתור באתר שצירפת
     const downloadBtnSelector = 'a#downloadButton';
